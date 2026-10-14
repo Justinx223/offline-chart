@@ -1,6 +1,6 @@
 // Service Worker: speichert App und Kursdaten, damit der Chart auf dem iPad auch ohne Internet läuft.
 // Bei Änderungen an der App die Versionsnummer erhöhen, dann holt sich das iPad die neue Version.
-const VERSION = 'replay-app-202610141013';
+const VERSION = 'replay-app-202610141058';
 const SHELL = [
   './', 'index.html', 'Replay.html', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
