@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Replay Chart">
+<meta name="theme-color" content="#131922">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<title>Replay Chart</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #131922; --panel2: #18202b; --line: #232c38; --text: #c9d3de; --muted: #7d8a9a;
+    --accent: #2962ff; --green: #22c55e; --red: #ef4444;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 13px; color-scheme: dark;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--panel); color: var(--text); overflow: hidden; overscroll-behavior: none; }
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  button, select, input { font: inherit; color: var(--text); }
+  button { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap; touch-action: manipulation; }
+  button:hover { border-color: #3a4656; background: #1d2632; }
+  button:active { transform: scale(.97); }
+  button.on { background: #1e3a8a; border-color: var(--accent); color: #fff; }
+  button.buy { background: #0f5132; border-color: #157347; color: #d1fae5; font-weight: 600; min-width: 64px; }
+  button.sell { background: #7a1d24; border-color: #a52834; color: #fee2e2; font-weight: 600; min-width: 64px; }
+  button.step { background: #1e3a8a; border-color: #2f4fb0; color: #fff; font-weight: 600; min-width: 48px; }
+  select, input[type=number], input[type=date] { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+  input[type=number] { width: 56px; }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+
+  .app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+  .toolbar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  .sep { width: 1px; height: 22px; background: var(--line); margin: 0 3px; }
+  .tfs { display: flex; gap: 2px; }
+  .tfs button { padding: 4px 7px; }
+  .ind { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+  .ind input[type=number] { width: 46px; padding: 3px 4px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .status { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34vw; }
+  .offline { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .offline.ok { color: var(--green); }
+
+  .main { display: grid; grid-template-columns: 46px minmax(0, 1fr); min-height: 0; }
+  .tools { display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; border-right: 1px solid var(--line); background: var(--panel); overflow-y: auto; }
+  .tools button { width: 38px; height: 31px; flex: none; padding: 0; display: grid; place-items: center; border-color: transparent; background: none; color: #b2b9c3; }
+  .tools button:hover { background: #1d2632; }
+  .tools button.on { background: #1e3a8a; color: #fff; }
+  .tools .hr { height: 1px; background: var(--line); margin: 4px 2px; flex: none; }
+  .tools svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+  .chart-box { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  #chart { position: absolute; left: 0; top: 0; display: block; cursor: crosshair; touch-action: none; }
+  .props { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: none; gap: 4px; align-items: center;
+    background: #1b2330; border: 1px solid #2c3746; border-radius: 8px; padding: 4px 6px; z-index: 4; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  .props.show { display: flex; }
+  .props .sw { width: 22px; height: 22px; border-radius: 4px; border: 2px solid transparent; padding: 0; }
+  .props .sw.on { border-color: #fff; }
+  .props button { padding: 2px 8px; }
+  .props select { padding: 2px 4px; }
+  .busy { position: absolute; inset: 0; display: none; place-items: center; background: rgba(13,17,23,.7); font-size: 16px; z-index: 5; }
+  .busy.show { display: grid; }
+
+  .panel { position: absolute; top: 8px; right: 84px; z-index: 6; width: 300px; max-height: calc(100% - 16px); overflow: auto; display: none;
+    background: #1b2330; border: 1px solid #2c3746; border-radius: 10px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  .panel.show { display: block; }
+  .panel h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .panel .grid { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; margin-bottom: 12px; }
+  .panel input[type=color] { width: 46px; height: 30px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 1px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .presets button { display: flex; align-items: center; gap: 6px; }
+  .presets i { display: inline-block; width: 26px; height: 14px; border-radius: 3px; }
+
+  .replay { display: none; gap: 6px; align-items: center; padding: 6px 8px; border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  .replay.show { display: flex; }
+  .replay label { color: var(--muted); display: flex; gap: 4px; align-items: center; }
+  .replay .info { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+
+  /* iPad / Touch: größere Knöpfe, Eingaben mit 16px (sonst zoomt Safari beim Antippen) */
+  @media (pointer: coarse) {
+    :root { font-size: 15px; }
+    button { min-height: 40px; padding: 6px 12px; }
+    .tfs button { padding: 6px 10px; }
+    select, input[type=number], input[type=date] { font-size: 16px; min-height: 40px; }
+    .ind input[type=number] { width: 54px; }
+    .main { grid-template-columns: 54px minmax(0, 1fr); }
+    .tools button { width: 46px; height: 42px; min-height: 0; }
+    .tools svg { width: 24px; height: 24px; }
+    .props .sw { width: 30px; height: 30px; min-height: 0; }
+    button.step { min-width: 64px; font-size: 16px; }
+    .replay { padding: 8px 10px; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+<!-- Sichtbar, solange kein JavaScript läuft (z. B. Vorschau in der iPad-Dateien-App) -->
+<div id="nojs" style="position:fixed;inset:0;z-index:99;background:#131922;color:#e6edf3;display:flex;align-items:center;justify-content:center;padding:24px;font:17px/1.5 system-ui,-apple-system,sans-serif;text-align:center">
+  <div style="max-width:560px">
+    <div style="font-size:22px;font-weight:600;margin-bottom:10px">Der Chart kann so nicht starten</div>
+    <div id="nojsText">Auf dem iPad laufen Webseiten aus der <b>Dateien-App</b> (oder iCloud / AirDrop) ohne JavaScript – deshalb bleibt sonst alles schwarz.<br><br>
+    Bitte die <b>Internet-Adresse</b> des Charts in <b>Safari</b> öffnen und dann <b>Teilen → Zum Home-Bildschirm</b> wählen. Danach läuft er auch im Flugmodus.</div>
+  </div>
+</div>
+<script>
+  // Fehler direkt auf dem Bildschirm zeigen (auf dem iPad gibt es keine Konsole)
+  window.addEventListener('error', e => {
+    const box = document.getElementById('nojs'), txt = document.getElementById('nojsText');
+    if (!box) return;
+    box.style.display = 'flex';
+    txt.textContent = 'Fehler: ' + (e.message || 'Datei konnte nicht geladen werden') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : (e.target && e.target.src ? ' (' + e.target.src.split('/').slice(-2).join('/') + ')' : ''));
+  }, true);
+</script>
+<div class="app">
+  <header class="toolbar">
+    <select id="symbol" title="Symbol"></select>
+    <div class="tfs" id="tfs"></div>
+    <span class="sep"></span>
+    <label class="ind" title="EMA schnell"><input type="checkbox" id="e1on" checked><span class="dot" id="e1dot"></span>EMA <input type="number" id="e1len" min="1" inputmode="numeric"></label>
+    <label class="ind" title="EMA langsam"><input type="checkbox" id="e2on" checked><span class="dot" id="e2dot"></span>EMA <input type="number" id="e2len" min="1" inputmode="numeric"></label>
+    <label class="ind" title="Parabolic SAR (0.02 / 0.02 / 0.2)"><input type="checkbox" id="sarOn" checked><span class="dot" id="sardot"></span>SAR</label>
+    <span class="sep"></span>
+    <button id="zoomOut" title="Herauszoomen">−</button>
+    <button id="zoomIn" title="Hineinzoomen">+</button>
+    <input type="date" id="gotoDate" title="Zu Datum springen">
+    <button id="btnEnd" title="Zur neuesten Kerze">⇥</button>
+    <span class="sep"></span>
+    <button id="btnReplay" title="Startkerze im Chart antippen">⏯ Replay</button>
+    <button id="btnRandom" title="Replay an einem zufälligen Tag starten">🎲 Zufall</button>
+    <button id="btnColors" title="Farben von Kerzen, Hintergrund und Indikatoren">🎨 Farben</button>
+    <span class="offline" id="offline"></span>
+    <div class="status" id="status"></div>
+  </header>
+
+  <div class="main">
+    <nav class="tools" id="tools"></nav>
+    <div class="chart-box" id="chartBox">
+      <canvas id="chart"></canvas>
+      <div class="props" id="props"></div>
+      <div class="panel" id="colorPanel">
+        <h4>Vorlagen</h4>
+        <div class="presets" id="presets"></div>
+        <h4>Kerzen</h4>
+        <div class="grid">
+          <label>Kerze steigend</label><input type="color" data-c="up">
+          <label>Kerze fallend</label><input type="color" data-c="down">
+          <label>Docht steigend</label><input type="color" data-c="wickUp">
+          <label>Docht fallend</label><input type="color" data-c="wickDown">
+        </div>
+        <h4>Hintergrund</h4>
+        <div class="grid">
+          <label>Hintergrund</label><input type="color" data-c="bg">
+          <label>Gitternetz</label><input type="color" data-c="grid">
+          <label>Gitternetz anzeigen</label><input type="checkbox" id="gridOn">
+        </div>
+        <h4>Indikatoren</h4>
+        <div class="grid">
+          <label>EMA schnell</label><input type="color" data-c="e1">
+          <label>EMA langsam</label><input type="color" data-c="e2">
+          <label>Parabolic SAR</label><input type="color" data-c="sar">
+        </div>
+        <button id="colorsClose" style="width:100%">Fertig</button>
+      </div>
+      <div class="busy" id="busy">Lade…</div>
+    </div>
+  </div>
+
+  <div class="replay" id="replayBar">
+    <button id="rpPlay" title="Abspielen / Pause (Leertaste)">▶</button>
+    <select id="rpSpeed" title="Kerzen pro Sekunde"><option value="1">1×</option><option value="2">2×</option><option value="4" selected>4×</option><option value="10">10×</option><option value="25">25×</option></select>
+    <button class="step" id="rpStep1" title="Eine Kerze weiter (Pfeil rechts)">+1 ▸</button>
+    <button class="step" id="rpStep5" title="5 Kerzen weiter">+5 ▸▸</button>
+    <button class="step" id="rpStep10" title="10 Kerzen weiter (Shift + Pfeil rechts)">+10 ▸▸▸</button>
+    <span class="sep"></span>
+    <label>Lots <input type="number" id="rpLots" step="0.01" min="0.01" inputmode="decimal"></label>
+    <label title="Stop-Loss in Pips, 0 = keiner">SL <input type="number" id="rpSl" step="1" min="0" inputmode="numeric"></label>
+    <label title="Take-Profit in Pips, 0 = keiner">TP <input type="number" id="rpTp" step="1" min="0" inputmode="numeric"></label>
+    <button class="buy" id="rpBuy" title="Kaufen zum aktuellen Kurs (B)">Buy</button>
+    <button class="sell" id="rpSell" title="Verkaufen zum aktuellen Kurs (S)">Sell</button>
+    <button id="rpClose" title="Position schließen und Orders löschen (C)">Schließen</button>
+    <span class="info" id="rpInfo"></span>
+    <button id="rpExit">Beenden</button>
+  </div>
+</div>
+
+<script src="app/ta.js"></script>
+<script src="app/data.js"></script>
+<script src="app/engine.js"></script>
+<script src="app/runner.js"></script>
+<script src="app/chart.js"></script>
+<script src="app/drawings.js"></script>
+<script src="daten/index.js" onerror="window.OFFLINE_INDEX = window.OFFLINE_INDEX || []"></script>
+<script src="app/replay_page.js"></script>
+</body>
+</html>
