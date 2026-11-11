@@ -1,6 +1,6 @@
 // Service Worker: speichert App und Kursdaten, damit der Chart auf dem iPad auch ohne Internet läuft.
 // Bei Änderungen an der App die Versionsnummer erhöhen, dann holt sich das iPad die neue Version.
-const VERSION = 'replay-app-202610141058';
+const VERSION = 'replay-app-202611111200';
 const SHELL = [
   './', 'index.html', 'Replay.html', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
@@ -14,13 +14,25 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
     .then(keys => Promise.all(keys.filter(k => k.startsWith('replay-app-') && k !== VERSION).map(k => caches.delete(k))))
+    // alte Symbol-Liste (daten/index.js) wegwerfen, damit neue Symbole wie US100 erscheinen
+    .then(() => caches.open('replay-daten')).then(c => c.keys().then(reqs => Promise.all(
+      reqs.filter(r => r.url.endsWith('/daten/index.js')).map(r => c.delete(r)))))
     .then(() => self.clients.claim()));
 });
 
-// Zuerst aus dem Speicher, sonst aus dem Netz (und dann speichern)
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  const url = new URL(req.url);
+  // Symbol-Liste: zuerst aus dem Netz (damit neue Symbole sofort da sind), offline aus dem Speicher
+  if (url.pathname.endsWith('/daten/index.js')) {
+    e.respondWith(fetch(req).then(resp => {
+      if (resp.ok) { const copy = resp.clone(); caches.open('replay-daten').then(c => c.put(req, copy)); }
+      return resp;
+    }).catch(() => caches.match(req, { ignoreSearch: true })));
+    return;
+  }
+  // alles andere: zuerst aus dem Speicher, sonst aus dem Netz (und dann speichern)
   e.respondWith(caches.match(req, { ignoreSearch: true }).then(hit => hit || fetch(req).then(resp => {
     if (resp.ok) {
       const copy = resp.clone();
